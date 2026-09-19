@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '8.9'
 
-            - name: Trova progetto Android
+        - name: Trova progetto Android
         run: |
           PROJECT_DIR=$(find . -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -print -quit | xargs -r dirname)
           if [ -z "$PROJECT_DIR" ]; then
