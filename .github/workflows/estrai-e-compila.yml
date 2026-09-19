@@ -25,16 +25,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Trova progetto Android
+            - name: Trova progetto Android
         run: |
-          PROJECT_DIR=$(dirname "$(find . -name settings.gradle -o -name settings.gradle.kts | head -n 1)")
+          PROJECT_DIR=$(find . -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -print -quit | xargs -r dirname)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERRORE: progetto Android non trovato"
+            find . -maxdepth 4 -type f | sort
+            exit 1
+          fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Progetto trovato in: $PROJECT_DIR"
 
       - name: Compila APK
         run: |
           cd "$PROJECT_DIR"
-          gradle assembleDebug
+          chmod +x gradlew 2>/dev/null || true
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
+
+      - name: Salva APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpesaDiOggi-APK
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Salva APK
         uses: actions/upload-artifact@v4
