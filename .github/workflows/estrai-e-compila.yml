@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Estrai il progetto
-        run: unzip -o SpesaDiOggi_v4_10righe.zip
+        run: unzip -o Spesa_di_Oggi_v3_senza_audio_acquisto_gmail.zip
 
       - name: Configura Java
         uses: actions/setup-java@v4
