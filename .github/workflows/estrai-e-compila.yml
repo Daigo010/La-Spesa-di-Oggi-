@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Estrai il progetto
-        run: unzip -o Spesa_di_Oggi_v3_senza_audio_acquisto_gmail.zip
+        run: unzip -o Spesa_di_Oggi_v3_senza_audio_acquisto.zip
 
       - name: Configura Java
         uses: actions/setup-java@v4
@@ -25,11 +25,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Trova progetto Android
+        run: |
+          PROJECT_DIR=$(dirname "$(find . -name settings.gradle -o -name settings.gradle.kts | head -n 1)")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Progetto trovato in: $PROJECT_DIR"
+
       - name: Compila APK
-        run: gradle assembleDebug
+        run: |
+          cd "$PROJECT_DIR"
+          gradle assembleDebug
 
       - name: Salva APK
         uses: actions/upload-artifact@v4
         with:
           name: SpesaDiOggi-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
