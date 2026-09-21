@@ -1,0 +1,139 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function sameUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function listPath(listId) {
+      return /databases/$(database)/documents/liste/$(listId);
+    }
+    function memberPath(listId, uid) {
+      return /databases/$(database)/documents/liste/$(listId)/members/$(uid);
+    }
+    function invitePath(invId) {
+      return /databases/$(database)/documents/inviti/$(invId);
+    }
+    function isOwner(listId) {
+      return signedIn() && exists(listPath(listId)) &&
+        get(listPath(listId)).data.ownerUid == request.auth.uid;
+    }
+    function isMember(listId) {
+      return signedIn() && exists(memberPath(listId, request.auth.uid)) &&
+        get(memberPath(listId, request.auth.uid)).data.role == 'member';
+    }
+    function canUseList(listId) {
+      return isOwner(listId) || isMember(listId);
+    }
+
+    match /utenti/{uid} {
+      allow read: if sameUser(uid);
+      allow create, update: if sameUser(uid)
+        && request.resource.data.listaId is string
+        && (
+          request.resource.data.listaId == uid ||
+          isMember(request.resource.data.listaId) ||
+          getAfter(memberPath(request.resource.data.listaId, uid)).data.role == 'member'
+        );
+      allow delete: if sameUser(uid);
+    }
+
+    match /liste/{listId} {
+      allow read: if canUseList(listId);
+      allow create: if signedIn() && listId == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOwner(listId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if isOwner(listId);
+
+      match /members/{memberUid} {
+        allow read: if isOwner(listId) || sameUser(memberUid);
+
+        allow create: if
+          (isOwner(listId) && request.resource.data.role == 'member') ||
+          (
+            sameUser(memberUid) &&
+            request.resource.data.role == 'member' &&
+            request.resource.data.inviteId is string &&
+            exists(invitePath(request.resource.data.inviteId)) &&
+            get(invitePath(request.resource.data.inviteId)).data.status == 'pending' &&
+            get(invitePath(request.resource.data.inviteId)).data.listId == listId &&
+            get(invitePath(request.resource.data.inviteId)).data.emailKey == request.auth.token.email.lower()
+          ) ||
+          (
+            sameUser(memberUid) &&
+            request.resource.data.role == 'owner' &&
+            listId == request.auth.uid
+          );
+
+        allow update: if
+          isOwner(listId) ||
+          (
+            sameUser(memberUid) &&
+            resource.data.role == 'member' &&
+            request.resource.data.role == 'member' &&
+            request.resource.data.emailKey == resource.data.emailKey &&
+            request.resource.data.inviteId == resource.data.inviteId
+          );
+
+        allow delete: if isOwner(listId) || sameUser(memberUid);
+      }
+
+      match /prodotti/{productId} {
+        allow read: if canUseList(listId);
+        allow create, update: if canUseList(listId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 200
+          && request.resource.data.qty is number
+          && request.resource.data.qty >= 1
+          && request.resource.data.qty <= 10000
+          && request.resource.data.bought is bool
+          && request.resource.data.price is string
+          && request.resource.data.price.size() <= 32
+          && request.resource.data.editedBy == request.auth.uid;
+        allow delete: if canUseList(listId);
+      }
+    }
+
+    match /inviti/{invId} {
+      allow read: if signedIn() && (
+        (resource.data.emailKey is string &&
+         resource.data.emailKey == request.auth.token.email.lower()) ||
+        resource.data.inviterUid == request.auth.uid
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.inviterUid == request.auth.uid
+        && request.resource.data.emailKey is string
+        && request.resource.data.emailKey != request.auth.token.email.lower()
+        && request.resource.data.listId is string
+        && isOwner(request.resource.data.listId)
+        && request.resource.data.status == 'pending';
+
+      allow update: if signedIn() && (
+        (
+          resource.data.emailKey == request.auth.token.email.lower() &&
+          resource.data.status == 'pending' &&
+          request.resource.data.listId == resource.data.listId &&
+          request.resource.data.emailKey == resource.data.emailKey &&
+          (
+            (request.resource.data.status == 'accepted' && request.resource.data.acceptedBy == request.auth.uid) ||
+            (request.resource.data.status == 'rejected' && request.resource.data.rejectedBy == request.auth.uid)
+          )
+        ) ||
+        (
+          resource.data.inviterUid == request.auth.uid &&
+          request.resource.data.listId == resource.data.listId &&
+          request.resource.data.inviterUid == resource.data.inviterUid
+        )
+      );
+
+      allow delete: if signedIn() && resource.data.inviterUid == request.auth.uid;
+    }
+  }
+}
